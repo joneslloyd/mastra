@@ -1,0 +1,84 @@
+name: Build and Release Mastra with Schema Fixes
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Triggers on version tags like v1.0.0
+  workflow_dispatch:  # Allows manual triggering
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build all packages
+        run: |
+          # Build core packages that are needed
+          pnpm --filter @mastra/core run build
+          pnpm --filter @mastra/evals run build
+          pnpm --filter @mastra/libsql run build
+          pnpm --filter @mastra/loggers run build
+          pnpm --filter @mastra/mcp run build
+          pnpm --filter @mastra/memory run build
+
+      - name: Create tarball of built packages
+        run: |
+          mkdir -p release-artifacts
+
+          # Create tarballs for each built package with dist folders
+          cd packages/core && tar -czf ../../release-artifacts/mastra-core.tar.gz dist/ package.json
+          cd ../evals && tar -czf ../../release-artifacts/mastra-evals.tar.gz dist/ package.json
+          cd ../libsql && tar -czf ../../release-artifacts/mastra-libsql.tar.gz dist/ package.json
+          cd ../loggers && tar -czf ../../release-artifacts/mastra-loggers.tar.gz dist/ package.json
+          cd ../mcp && tar -czf ../../release-artifacts/mastra-mcp.tar.gz dist/ package.json
+          cd ../memory && tar -czf ../../release-artifacts/mastra-memory.tar.gz dist/ package.json
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release-artifacts/*.tar.gz
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          name: "Mastra with Schema Validation Fixes ${{ github.ref_name }}"
+          body: |
+            🔧 **Mastra Fork with DataForSEO Schema Validation Fixes**
+
+            This release contains pre-built Mastra packages with fixes for DataForSEO MCP tool schema validation issues.
+
+            **What's Fixed:**
+            - ✅ Schema validation for DataForSEO MCP tools
+            - ✅ All 24 DataForSEO tools should now work properly
+            - ✅ Pre-built dist/ folders included
+
+            **How to use:**
+            Download the tarballs and extract them, or reference them directly in your package.json:
+
+            ```json
+            {
+              "@mastra/core": "https://github.com/joneslloyd/mastra/releases/download/${{ github.ref_name }}/mastra-core.tar.gz",
+              "@mastra/evals": "https://github.com/joneslloyd/mastra/releases/download/${{ github.ref_name }}/mastra-evals.tar.gz",
+              "@mastra/libsql": "https://github.com/joneslloyd/mastra/releases/download/${{ github.ref_name }}/mastra-libsql.tar.gz",
+              "@mastra/loggers": "https://github.com/joneslloyd/mastra/releases/download/${{ github.ref_name }}/mastra-loggers.tar.gz",
+              "@mastra/mcp": "https://github.com/joneslloyd/mastra/releases/download/${{ github.ref_name }}/mastra-mcp.tar.gz",
+              "@mastra/memory": "https://github.com/joneslloyd/mastra/releases/download/${{ github.ref_name }}/mastra-memory.tar.gz"
+            }
+            ```
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
